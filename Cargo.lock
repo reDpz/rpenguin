@@ -1709,6 +1709,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpenguin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "cgmath",
+ "env_logger",
+ "image",
+ "log",
+ "pollster",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2423,21 +2438,6 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winapi",
-]
-
-[[package]]
-name = "wgpu-testing"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytemuck",
- "cgmath",
- "env_logger",
- "image",
- "log",
- "pollster",
- "wgpu",
- "winit",
 ]
 
 [[package]]

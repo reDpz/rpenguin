@@ -1,5 +1,5 @@
 use pollster::FutureExt;
-use wgpu_testing::run;
+use rpenguin::run;
 
 fn main() {
     // pollster::block_on(run());

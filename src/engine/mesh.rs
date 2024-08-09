@@ -1,4 +1,4 @@
-use crate::engine::vert::Vert;
+use crate::engine::vert::TextureVert;
 use crate::engine::vert::VertexBufferLayoutDescriptor;
 
 #[derive(Clone)]
@@ -42,9 +42,9 @@ impl<V: VertexBufferLayoutDescriptor + Clone> Mesh<V> {
     }
 }
 
-impl Mesh<Vert> {
-    pub fn cube(position: (f32, f32, f32), size: (f32, f32, f32)) -> Mesh<Vert> {
-        let (vertices, indices) = Vert::cube(position, size);
+impl Mesh<TextureVert> {
+    pub fn cube(position: (f32, f32, f32), size: (f32, f32, f32)) -> Mesh<TextureVert> {
+        let (vertices, indices) = TextureVert::cube(position, size);
         Mesh { vertices, indices }
     }
 }

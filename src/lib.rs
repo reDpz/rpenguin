@@ -7,12 +7,13 @@ use engine::{
     instance::*,
     mesh::Mesh,
     render_pipeline, texture,
-    vert::{Vert, VertexBufferLayoutDescriptor},
+    vert::{TextureVert, VertexBufferLayoutDescriptor},
     *,
 };
 
 use timer::InstantTimer;
-use wgpu::util::DeviceExt;
+use vert::BasicVertex;
+use wgpu::util::{DeviceExt, RenderEncoder};
 use wgpu::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
     BufferUsages, PresentMode, ShaderStages,
@@ -64,13 +65,9 @@ pub async fn run() {
     window.set_cursor_visible(CURSOR_VISIBILITY);
 
     // create our meshes
-    let (vertices, indices) = Mesh::to_vertex_indices(&[
-        // Mesh::cube((-3.0, 0.0, 0.0), (0.5, 0.5, 0.5)),
-        Mesh::cube((0.0, 0.0, 0.0), (0.5, 0.5, 0.5)),
-        // Mesh::cube((3.0, 0.0, 0.0), (1.5, 1.5, 1.5)),
-    ]);
+    let vertices = BasicVertex::DEFAULT_TRIANGLE;
 
-    let mut state = State::new(&window, vertices, indices).await;
+    let mut state = State::new(&window, vertices.to_vec()).await;
 
     event_loop
         .run(move |event, control_flow| match event {
@@ -112,7 +109,7 @@ pub async fn run() {
         .unwrap();
 }
 
-pub struct State<'a> {
+pub struct State<'a, V: VertexBufferLayoutDescriptor> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -136,24 +133,17 @@ pub struct State<'a> {
     render_pipeline: Option<wgpu::RenderPipeline>,
     pub last_frame_draw: Instant,
 
-    vertices: Vec<Vert>,
+    vertices: Vec<V>,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
 
-    indices: Vec<u16>,
-    index_buffer: wgpu::Buffer,
-    index_count: u32,
-
     depth_texture: engine::texture::Texture,
-
-    diffuse_bind_group: wgpu::BindGroup,
-    diffuse_texture: texture::Texture,
 
     temp_index: usize,
 }
 
-impl<'a> State<'a> {
-    pub async fn new(window: &'a Window, vertices: Vec<Vert>, indices: Vec<u16>) -> State<'a> {
+impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
+    pub async fn new(window: &'a Window, vertices: Vec<V>) -> State<'a, V> {
         let size = window.inner_size();
 
         // instance is like vulkan instance i assume
@@ -244,55 +234,6 @@ impl<'a> State<'a> {
 
         /*--------------------- TEXTURES ---------------------*/
 
-        let diffuse_bytes = include_bytes!(crate_path!("assets/images/lunaistabby-cat.png"));
-        let diffuse_texture = texture::Texture::from_bytes(
-            &device,
-            &queue,
-            diffuse_bytes,
-            Some("cat"),
-            wgpu::AddressMode::ClampToEdge,
-        )
-        .unwrap(); // teehee
-
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("texture_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        // this needs to be the same as "Texture entry above", what does that mean
-                        ty: BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let diffuse_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("diffuse_bind_group"),
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-        });
-
         // depth texture
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, Some("Depth Texture"));
@@ -309,16 +250,7 @@ impl<'a> State<'a> {
                         z: z as f32,
                     } - INSTANCE_DISPLACEMENT;
 
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
+                    Instance { position }
                 })
             })
             .collect::<Vec<_>>();
@@ -398,22 +330,14 @@ impl<'a> State<'a> {
         };
         let vertex_buffer = device.create_buffer_init(&vertex_descriptor);
 
-        let index_descriptor = wgpu::util::BufferInitDescriptor {
-            label: Some("Index buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: BufferUsages::INDEX,
-        };
-
-        let index_buffer = device.create_buffer_init(&index_descriptor);
-
         let rp_builder = render_pipeline::RenderPipelineBuilder::new(
             &device,
             render_pipeline::ShaderCollection {
                 shaders: vec![shader],
                 ..Default::default()
             },
-            vec![Vert::desc(), InstanceRaw::desc()],
-            vec![texture_bind_group_layout, camera_bind_group_layout],
+            vec![TextureVert::desc(), InstanceRaw::desc()],
+            vec![camera_bind_group_layout],
             surface_format,
             wgpu::PrimitiveTopology::TriangleList,
             Some(wgpu::DepthStencilState {
@@ -426,7 +350,6 @@ impl<'a> State<'a> {
         );
 
         let vertex_count = vertices.len() as u32;
-        let index_count = indices.len() as u32;
 
         // helpful timer
         let timer = InstantTimer::from_secs_f32(0.5);
@@ -465,14 +388,7 @@ impl<'a> State<'a> {
             vertex_buffer,
             vertex_count,
 
-            indices,
-            index_buffer,
-            index_count,
-
             depth_texture,
-
-            diffuse_bind_group,
-            diffuse_texture,
 
             temp_index: 0,
         }
@@ -646,19 +562,16 @@ impl<'a> State<'a> {
 
             render_pass.set_pipeline(pipeline);
 
-            // textures
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-
             // camera
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
             // so just our vertices
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             // render_pass.draw(0..self.vertex_count, 0..1);
-            render_pass.draw_indexed(0..self.index_count, 0, 0..self.instances.len() as _);
+            render_pass.draw(0..self.vertex_count, 0..1);
+            // render_pass.draw_indexed(0..self.index_count, 0, 0..self.instances.len() as _);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -703,32 +616,6 @@ impl<'a> State<'a> {
 
     fn get_frame_delta_f64(&self) -> f64 {
         self.last_frame_draw.elapsed().as_secs_f64()
-    }
-
-    fn swap_texture(&mut self, image_bytes: &[u8]) {
-        self.diffuse_texture = texture::Texture::from_bytes(
-            &self.device,
-            &self.queue,
-            image_bytes,
-            None,
-            wgpu::AddressMode::ClampToEdge,
-        )
-        .unwrap();
-
-        self.diffuse_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("diffuse_bind_group"),
-            layout: &self.rp_builder.bind_group_layouts[0],
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.diffuse_texture.sampler),
-                },
-            ],
-        });
     }
 }
 
