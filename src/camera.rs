@@ -69,10 +69,10 @@ impl ActionSet {
 
 impl CameraController2D {
     pub fn new() -> Self {
-        let mut action_set = vec![(KeyCode::KeyW, false); ActionSet::SIZE];
+        let mut action_set = Vec::with_capacity(ActionSet::SIZE);
         action_set[ActionSet::UP] = (KeyCode::KeyW, false);
         action_set[ActionSet::DOWN] = (KeyCode::KeyS, false);
-        action_set[ActionSet::LEFT] = (KeyCode::KeyA, true);
+        action_set[ActionSet::LEFT] = (KeyCode::KeyA, false);
         action_set[ActionSet::RIGHT] = (KeyCode::KeyA, false);
         action_set[ActionSet::CLOCKWISE] = (KeyCode::KeyE, false);
         action_set[ActionSet::ACLOCKWISE] = (KeyCode::KeyQ, false);
@@ -110,14 +110,12 @@ impl CameraController2D {
         }
     }
 
-    pub fn process(&self, camera: &mut Camera2D, delta: f32) {
+    pub fn update_camera(&self, camera: &mut Camera2D, delta: f32) {
         let spelta = self.speed * delta;
         if self.action_set[ActionSet::RIGHT].1 {
-            println!("moving right");
             camera.position.x += spelta;
         }
         if self.action_set[ActionSet::LEFT].1 {
-            println!("moving left");
             camera.position -= spelta;
         }
     }

@@ -15,6 +15,7 @@ bytemuck = { version = "1.16.1", features = ["derive"] }
 image = "0.25.2"
 anyhow = "1.0.86"
 cgmath = { version = "0.18.0", features = ["swizzle"] }
+glam = { version = "0.28.0", features = ["bytemuck"] }
 
 # Enable a large amount of optimization in the dev profile for dependencies.
 [profile.dev.package."*"]

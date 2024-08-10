@@ -1,4 +1,3 @@
-use crate::engine::vert::VertexBufferLayoutDescriptor;
 pub struct RenderPipelineBuilder<'a> {
     pub sc: ShaderCollection,
     pub bind_group_layouts: Vec<wgpu::BindGroupLayout>,
@@ -7,6 +6,11 @@ pub struct RenderPipelineBuilder<'a> {
     pub topology: wgpu::PrimitiveTopology,
     pub v_buffers: Vec<wgpu::VertexBufferLayout<'a>>,
     pub depth_stencil: Option<wgpu::DepthStencilState>,
+
+    pub label: String,
+    pub front_face: wgpu::FrontFace,
+    pub cull_mode: Option<wgpu::Face>,
+    pub polygon_mode: wgpu::PolygonMode,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -30,7 +34,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
         let render_targets = vec![Some(wgpu::ColorTargetState {
             format: surface_format,
-            blend: Some(wgpu::BlendState::REPLACE),
+            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
             write_mask: wgpu::ColorWrites::ALL,
         })];
 
@@ -42,12 +46,32 @@ impl<'a> RenderPipelineBuilder<'a> {
             topology,
             v_buffers: vertex_buffer_descriptors,
             depth_stencil,
+
+            label: "Render Pipeline".to_string(),
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            polygon_mode: wgpu::PolygonMode::Fill,
         }
+    }
+
+    pub fn set_bind_group_layouts(
+        &mut self,
+        device: &wgpu::Device,
+        bind_group_layouts: Vec<wgpu::BindGroupLayout>,
+    ) {
+        self.bind_group_layouts = bind_group_layouts;
+        let ref_layouts: Vec<&wgpu::BindGroupLayout> = self.bind_group_layouts.iter().collect();
+        self.render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline layout"),
+                bind_group_layouts: &ref_layouts,
+                push_constant_ranges: &[],
+            });
     }
 
     pub fn build(&self, device: &wgpu::Device) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some(&self.label),
             layout: Some(&self.render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &self.sc.shaders[self.sc.vert_index],
@@ -64,19 +88,19 @@ impl<'a> RenderPipelineBuilder<'a> {
             primitive: wgpu::PrimitiveState {
                 topology: self.topology,
                 strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
+                front_face: self.front_face,
                 // it's literally this easy
-                cull_mode: Some(wgpu::Face::Back),
-                // cull_mode: None,
+                cull_mode: self.cull_mode,
                 // Any other value REQUIRES Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
+                polygon_mode: self.polygon_mode,
 
                 // REQUIRES Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
                 // REQUIRES Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
             },
-            depth_stencil: self.depth_stencil.clone(), // RAHHHHHHHHHHHHHHHHH
+            // FIXME: do it without cloning
+            depth_stencil: self.depth_stencil.clone(),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -85,6 +109,11 @@ impl<'a> RenderPipelineBuilder<'a> {
             multiview: None,
             cache: None,
         })
+    }
+
+    pub fn set_blend_mode(&mut self, index: usize, mode: Option<wgpu::BlendState>) {
+        todo!()
+        // self.render_targets[index].unwrap().blend = mode;
     }
 }
 
