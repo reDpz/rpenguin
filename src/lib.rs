@@ -5,19 +5,17 @@ mod engine;
 use engine::prelude::*;
 
 use render_pipeline::RenderPipelineBuilder;
-use timer::InstantTimer;
 use vert::BasicVertex;
-use wgpu::util::{DeviceExt, RenderEncoder};
+use wgpu::util::DeviceExt;
 
 use winit::dpi::PhysicalSize;
 use winit::{
     event::*,
     event_loop::EventLoop,
-    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const CURSOR_VISIBILITY: bool = false;
 
@@ -106,6 +104,8 @@ pub struct State<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> {
     size: winit::dpi::PhysicalSize<u32>,
     clear_color: wgpu::Color,
 
+    last_update: Instant,
+
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
@@ -185,10 +185,11 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
 
         /* ----------------- CAMERA ----------------- */
 
-        let camera = Camera2D::new(size.height as f32 / size.width as f32);
+        let mut camera = Camera2D::new(size.height as f32 / size.width as f32);
+        camera.update_projection_matrix();
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera projection matrix"),
-            contents: bytemuck::cast_slice(&[camera.build_projection_matrix()]),
+            contents: bytemuck::cast_slice(&[camera.proj]),
             // you need to enable bytemuck feature in glam to do this ^^^^^^^^^
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             // this is obviously a uniform ^^^  this is required to copy to it ^
@@ -218,7 +219,7 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             }],
         });
 
-        let camera_controller = CameraController2D::new();
+        let camera_controller = CameraController2D::new(2.0);
 
         /* ----------------- SHADERS ----------------- */
 
@@ -270,6 +271,7 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             config,
             size,
             clear_color,
+            last_update: Instant::now(),
 
             pipeline_builder,
             pipeline,
@@ -318,14 +320,18 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
 
     fn update(&mut self) {
         // update camera
-        self.camera_controller
-            .process(&mut self.camera, 0.000000001);
-        // TODO: Recalculate camera uniform
+        let delta = self.last_update.elapsed().as_secs_f32();
+
+        self.camera.update_projection_matrix();
+        self.camera_controller.process(&mut self.camera, delta);
+
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
-            bytemuck::cast_slice(&[self.camera.build_projection_matrix()]),
+            bytemuck::cast_slice(&[self.camera.proj]),
         );
+
+        self.last_update = Instant::now();
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
