@@ -29,6 +29,7 @@ impl Camera2D {
     pub fn new(aspect: f32) -> Self {
         Self {
             aspect,
+
             position: glam::Vec3::ZERO,
             rotation: glam::Quat::from_rotation_z(0.0),
             zoom: 1.0,
@@ -36,18 +37,21 @@ impl Camera2D {
         }
     }
 
-    #[inline]
     pub fn update_projection_matrix(&mut self) {
-        // warp x to transform world space to screen space
-        let scale = glam::Vec3 {
-            x: self.zoom * self.aspect,
-            y: self.zoom,
-            z: self.zoom,
-        };
-
         // WARN: might need to transform using OPENGL_TO_WGPU_MATRIX
-        self.proj =
-            glam::Mat4::from_scale_rotation_translation(scale, self.rotation, self.position);
+        // TODO: Math to figure the correct way of applying zoom
+        let zoomsqred = self.zoom * self.zoom;
+        let left = (-zoomsqred + self.position.x);
+
+        let right = (zoomsqred + self.position.x);
+
+        let top = (zoomsqred + self.position.y) * self.aspect;
+        let bottom = (-zoomsqred + self.position.y) * self.aspect;
+
+        self.proj = glam::Mat4::orthographic_lh(left, right, bottom, top, 0.0, 1.0);
+
+        // self.proj =
+        //     glam::Mat4::from_scale_rotation_translation(scale, self.rotation, self.position);
     }
 }
 
@@ -55,6 +59,7 @@ pub struct CameraController2D {
     // properties
     /// units traveled per second
     pub speed: f32,
+    pub markiplier: f32,
     pub zoom_step: f32,
 
     // inputs
@@ -63,6 +68,7 @@ pub struct CameraController2D {
     pub down: bool,
     pub left: bool,
     pub right: bool,
+    pub mod_key: bool,
 
     // mouse
     pub scroll_delta: f32,
@@ -73,10 +79,12 @@ impl Default for CameraController2D {
         Self {
             speed: 1.0,
             zoom_step: 0.2,
+            markiplier: 4.0,
             up: false,
             down: false,
             left: false,
             right: false,
+            mod_key: false,
             scroll_delta: 0.0,
         }
     }
@@ -96,7 +104,7 @@ impl CameraController2D {
                 delta: MouseScrollDelta::LineDelta(_, ydelta),
                 ..
             } => {
-                self.scroll_delta += ydelta;
+                self.scroll_delta -= ydelta;
                 true
             }
             WindowEvent::KeyboardInput {
@@ -133,6 +141,11 @@ impl CameraController2D {
                         true
                     }
 
+                    KeyCode::ShiftLeft => {
+                        self.mod_key = is_pressed;
+                        true
+                    }
+
                     _ => false,
                 }
             }
@@ -141,35 +154,39 @@ impl CameraController2D {
     }
 
     pub fn process(&mut self, camera: &mut Camera2D, delta: f32) {
-        let spelta = self.speed * delta;
+        let mut spelta = self.speed * delta * camera.zoom;
 
-        let mut translation = glam::Vec4::ZERO;
-
-        if self.left {
-            translation.x += 1.0;
+        if self.mod_key {
+            spelta *= self.markiplier;
         }
 
-        if self.right {
+        let mut translation = glam::Vec3::ZERO;
+
+        if self.left {
             translation.x -= 1.0;
         }
 
+        if self.right {
+            translation.x += 1.0;
+        }
+
         if self.down {
-            translation.y += 1.0;
+            translation.y -= 1.0;
         }
 
         if self.up {
-            translation.y -= 1.0;
+            translation.y += 1.0;
         }
 
         translation = translation.normalize_or_zero() * spelta;
 
         // zooming in and out
         if self.scroll_delta != 0.0 {
-            camera.zoom = (camera.zoom + self.scroll_delta * self.zoom_step).max(0.01);
+            camera.zoom = (camera.zoom + self.scroll_delta * self.zoom_step).max(0.1);
             self.scroll_delta = 0.0;
         }
 
-        camera.position += (translation).xyz();
+        camera.position += translation;
     }
 
     pub fn dinput(&mut self, event: &DeviceEvent) {
