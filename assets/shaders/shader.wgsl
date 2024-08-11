@@ -33,12 +33,12 @@ fn vs_main(
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let dist_squared = (in.vert_position.x * in.vert_position.x) + (in.vert_position.y * in.vert_position.y);
 
-    if dist_squared <= 0.2 {
-        return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    if dist_squared > 0.2 {
+        discard;
     }
 
 
-    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
 }
 
 @fragment
