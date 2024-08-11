@@ -1,6 +1,7 @@
+use glam::Vec4Swizzles;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
-    event::{DeviceEvent, ElementState, KeyEvent, WindowEvent},
+    event::{DeviceEvent, ElementState, KeyEvent, MouseScrollDelta, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
 
@@ -20,6 +21,8 @@ pub struct Camera2D {
     pub position: glam::Vec3,
     pub rotation: glam::Quat,
     pub zoom: f32,
+
+    pub proj: glam::Mat4,
 }
 
 impl Camera2D {
@@ -29,11 +32,12 @@ impl Camera2D {
             position: glam::Vec3::ZERO,
             rotation: glam::Quat::from_rotation_z(0.0),
             zoom: 1.0,
+            proj: glam::Mat4::ZERO,
         }
     }
 
     #[inline]
-    pub fn build_projection_matrix(&self) -> glam::Mat4 {
+    pub fn update_projection_matrix(&mut self) {
         // warp x to transform world space to screen space
         let scale = glam::Vec3 {
             x: self.zoom * self.aspect,
@@ -42,7 +46,8 @@ impl Camera2D {
         };
 
         // WARN: might need to transform using OPENGL_TO_WGPU_MATRIX
-        glam::Mat4::from_scale_rotation_translation(scale, self.rotation, self.position)
+        self.proj =
+            glam::Mat4::from_scale_rotation_translation(scale, self.rotation, self.position);
     }
 }
 
@@ -50,41 +55,50 @@ pub struct CameraController2D {
     // properties
     /// units traveled per second
     pub speed: f32,
+    pub zoom_step: f32,
+
     // inputs
-    pub action_set: Vec<(KeyCode, bool)>,
+    // keyboard
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+
+    // mouse
+    pub scroll_delta: f32,
 }
 
-struct ActionSet;
-impl ActionSet {
-    const UP: usize = 0;
-    const DOWN: usize = 1;
-    const LEFT: usize = 2;
-    const RIGHT: usize = 3;
-
-    const CLOCKWISE: usize = 4;
-    const ACLOCKWISE: usize = 5;
-
-    const SIZE: usize = 6;
+impl Default for CameraController2D {
+    fn default() -> Self {
+        Self {
+            speed: 1.0,
+            zoom_step: 0.2,
+            up: false,
+            down: false,
+            left: false,
+            right: false,
+            scroll_delta: 0.0,
+        }
+    }
 }
 
 impl CameraController2D {
-    pub fn new() -> Self {
-        let mut action_set = vec![(KeyCode::KeyW, false); ActionSet::SIZE];
-        action_set[ActionSet::UP] = (KeyCode::KeyW, false);
-        action_set[ActionSet::DOWN] = (KeyCode::KeyS, false);
-        action_set[ActionSet::LEFT] = (KeyCode::KeyA, true);
-        action_set[ActionSet::RIGHT] = (KeyCode::KeyA, false);
-        action_set[ActionSet::CLOCKWISE] = (KeyCode::KeyE, false);
-        action_set[ActionSet::ACLOCKWISE] = (KeyCode::KeyQ, false);
-
+    pub fn new(speed: f32) -> Self {
         Self {
-            speed: 1.0,
-            action_set,
+            speed,
+            ..Default::default()
         }
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_, ydelta),
+                ..
+            } => {
+                self.scroll_delta += ydelta;
+                true
+            }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
@@ -98,28 +112,64 @@ impl CameraController2D {
 
                 // TODO: REFACTOR INPUTS
                 // this should be short enough, only 6 cycles currently but this is suboptimal
-                for (action_code, mut pressed) in &self.action_set {
-                    if *action_code == *keycode {
-                        pressed = is_pressed;
-                        return true;
+                match keycode {
+                    KeyCode::KeyW => {
+                        self.up = is_pressed;
+                        true
                     }
+
+                    KeyCode::KeyD => {
+                        self.right = is_pressed;
+                        true
+                    }
+
+                    KeyCode::KeyA => {
+                        self.left = is_pressed;
+                        true
+                    }
+
+                    KeyCode::KeyS => {
+                        self.down = is_pressed;
+                        true
+                    }
+
+                    _ => false,
                 }
-                false
             }
             _ => false,
         }
     }
 
-    pub fn process(&self, camera: &mut Camera2D, delta: f32) {
+    pub fn process(&mut self, camera: &mut Camera2D, delta: f32) {
         let spelta = self.speed * delta;
-        if self.action_set[ActionSet::RIGHT].1 {
-            println!("moving right");
-            camera.position.x += spelta;
+
+        let mut translation = glam::Vec4::ZERO;
+
+        if self.left {
+            translation.x += 1.0;
         }
-        if self.action_set[ActionSet::LEFT].1 {
-            println!("moving left");
-            camera.position -= spelta;
+
+        if self.right {
+            translation.x -= 1.0;
         }
+
+        if self.down {
+            translation.y += 1.0;
+        }
+
+        if self.up {
+            translation.y -= 1.0;
+        }
+
+        translation = translation.normalize_or_zero() * spelta;
+
+        // zooming in and out
+        if self.scroll_delta != 0.0 {
+            camera.zoom = (camera.zoom + self.scroll_delta * self.zoom_step).max(0.01);
+            self.scroll_delta = 0.0;
+        }
+
+        camera.position += (translation).xyz();
     }
 
     pub fn dinput(&mut self, event: &DeviceEvent) {
