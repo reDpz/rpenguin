@@ -87,6 +87,7 @@ impl Default for Particle {
 pub struct NBodySimulation {
     pub particles: Vec<Particle>,
     pub radius: f32,
+    pub speed: f32,
 }
 
 impl Default for NBodySimulation {
@@ -98,6 +99,7 @@ impl Default for NBodySimulation {
         Self {
             particles,
             radius: 15.0,
+            speed: 1000.0,
         }
     }
 }
@@ -133,7 +135,44 @@ impl NBodySimulation {
             }
         }
 
-        Self { particles, radius }
+        Self {
+            particles,
+            radius,
+            ..Default::default()
+        }
+    }
+
+    pub fn rand_distribute(
+        max: glam::Vec2,
+        min: glam::Vec2,
+        particle_count: usize,
+        radius: f32,
+    ) -> Self {
+        let mut rng = thread_rng();
+
+        let mut particles = Vec::with_capacity(particle_count);
+
+        for _ in 0..particle_count {
+            particles.push(Particle {
+                position: glam::Vec2 {
+                    x: rng.gen_range(min.x..max.x),
+                    y: rng.gen_range(min.y..max.y),
+                },
+                velocity: glam::Vec2::ZERO,
+                color: glam::Vec3 {
+                    x: rng.next_u32() as f32,
+                    y: rng.next_u32() as f32,
+                    z: rng.next_u32() as f32,
+                }
+                .normalize(),
+            });
+        }
+
+        Self {
+            particles,
+            radius,
+            ..Default::default()
+        }
     }
 
     // TODO: Add the color
@@ -151,15 +190,30 @@ impl NBodySimulation {
 
     pub fn update(&mut self, delta: f32) {
         // actual nbody sim
-        // let len = self.particles.len();
+        let len = self.particles.len();
+        let r2 = self.radius * self.radius;
+        for i in 0..len {
+            for j in (i + 1)..len {
+                let i2j = self.particles[j].position - self.particles[i].position;
+                let distance_squared = i2j.length_squared();
+
+                if distance_squared > r2 {
+                    let direction = i2j.normalize();
+                    let attraction = 1.0 / distance_squared;
+                    let to_add = direction * attraction * delta * self.speed;
+                    self.particles[i].velocity += to_add;
+                    self.particles[j].velocity -= to_add;
+
+                    // println!("updated particles {i}, {j}");
+                } /* else {
+                      self.particles[i].velocity = -self.particles[i].velocity * 1.001;
+                      self.particles[j].velocity = -self.particles[j].velocity * 1.001;
+                  } */
+            }
+        }
+
         // apply velocities
         self.particles.par_iter_mut().for_each(|p| {
-            let to_center = glam::Vec2::ZERO - p.position;
-            let length = to_center.length();
-            if length > 0.0 {
-                let pull_strength = 0.25 / length;
-                p.velocity += to_center * delta * length * pull_strength;
-            }
             p.position += p.velocity * delta;
         });
     }

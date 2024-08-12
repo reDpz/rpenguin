@@ -176,7 +176,13 @@ impl<'a> State<'a> {
 
         /* ----------------- N BODY SIMULATION ----------------- */
 
-        let nbody_simulation = NBodySimulation::grid(100, 5.0, 15.0);
+        let area = 1000.0;
+        let nbody_simulation = NBodySimulation::rand_distribute(
+            glam::Vec2 { x: area, y: area },
+            glam::Vec2 { x: -area, y: -area },
+            100,
+            1.0,
+        );
 
         /* ----------------- CAMERA ----------------- */
 
@@ -330,9 +336,12 @@ impl<'a> State<'a> {
         false
     }
 
+    // TODO: delta is behaving oddly
     fn update(&mut self) {
         // update camera
         let delta = self.last_update.elapsed().as_secs_f32();
+        // let delta = 1.0 / 30.0;
+        println!("delta: {delta}");
 
         self.camera.update_projection_matrix();
         self.camera_controller.process(&mut self.camera, delta);
@@ -340,15 +349,6 @@ impl<'a> State<'a> {
         self.nbody_simulation.update(delta);
         self.instances = self.nbody_simulation.instances();
         self.recreate_instance_buffer();
-
-        // INFO: this wont work because no COPY_DST flag which is needed for writing to the buffer.
-        // There is a way of doing this, go figure it out
-
-        /* self.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(&self.instances),
-        ); */
 
         self.queue.write_buffer(
             &self.camera_buffer,
