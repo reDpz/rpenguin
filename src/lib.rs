@@ -6,10 +6,9 @@ use engine::prelude::*;
 
 mod particle;
 
-use particle::simulation::NBodySimulation;
+use particle::simulation::{NBodySimulation, ParticleInstance};
 use render_pipeline::RenderPipelineBuilder;
-use vert::BasicVertex;
-use wgpu::util::{DeviceExt, RenderEncoder};
+use wgpu::util::DeviceExt;
 
 use winit::dpi::PhysicalSize;
 use winit::{
@@ -18,24 +17,13 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-const CURSOR_VISIBILITY: bool = false;
-
-const NUM_INSTANCES_PER_ROW: u32 = 1000;
-const NUM_INSTANCE_ROWS: u32 = 1000;
-// gotta understand a bit about what this means
-const INSTANCE_DISPLACEMENT: glam::Vec3 = glam::Vec3::new(
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-    0.0,
-    NUM_INSTANCES_PER_ROW as f32 * 0.5,
-);
-
-const TOPOLOGIES: [wgpu::PrimitiveTopology; 3] = [
+/* const TOPOLOGIES: [wgpu::PrimitiveTopology; 3] = [
     wgpu::PrimitiveTopology::TriangleList,
     wgpu::PrimitiveTopology::PointList,
     wgpu::PrimitiveTopology::LineList,
-];
+]; */
 
 pub async fn run() {
     env_logger::init();
@@ -124,7 +112,7 @@ pub struct State<'a> {
     pipeline_builder: render_pipeline::RenderPipelineBuilder<'a>,
     pipeline: wgpu::RenderPipeline,
 
-    instances: Vec<glam::Mat4>,
+    instances: Vec<ParticleInstance>,
     instance_buffer: wgpu::Buffer,
 }
 
@@ -186,9 +174,18 @@ impl<'a> State<'a> {
             view_formats: vec![],
         };
 
+        /* ----------------- N BODY SIMULATION ----------------- */
+
+        let nbody_simulation = NBodySimulation::grid(100, 5.0, 15.0);
+
         /* ----------------- CAMERA ----------------- */
 
         let mut camera = Camera2D::new(size.width as f32 / size.height as f32);
+        camera.zoom = 10.0;
+        {
+            let center = nbody_simulation.center();
+            camera.position = glam::Vec3::new(center.x, center.y, 0.0);
+        }
         camera.update_projection_matrix();
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera projection matrix"),
@@ -223,10 +220,6 @@ impl<'a> State<'a> {
         });
 
         let camera_controller = CameraController2D::new(4.0);
-
-        /* ----------------- N BODY SIMULATION ----------------- */
-
-        let nbody_simulation = NBodySimulation::grid(100, 5.0);
 
         /* ----------------- SHADERS ----------------- */
 
@@ -263,7 +256,7 @@ impl<'a> State<'a> {
                 shaders: vec![shader],
                 ..Default::default()
             },
-            vec![glam::Mat4::desc()],
+            vec![ParticleInstance::desc()],
             vec![camera_bind_group_layout],
             surface_format,
             wgpu::PrimitiveTopology::TriangleList,
