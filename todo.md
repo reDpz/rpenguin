@@ -5,7 +5,14 @@
     - egui
     - imgui ?? (only example i found of this was 10 months old and severely outdated for wgpu 22.0)
 - [x] instance
-- [ ] add color to instance
-- [ ] REFACTOR INPUT HANDLING FOR CAMERA CONTROLLER
+- [x] add color to instance
+- [x] REFACTOR INPUT HANDLING FOR CAMERA CONTROLLER
+- [ ] draw grid in background
+    - *how are we going to do this?*
+    - have a second render pipeline
+    - this one just has a quad or a big tri representing the entire screen
+    - colors for the grid are built into the grid shader
+    - uniform buffer that passes in the position and zoom of camera
+    - you can figure out how to draw the lines by yourself bro, it's just math
 
-
+    - after all this, do 1 render_pass of this and after this the second render_pass is the actual particles
