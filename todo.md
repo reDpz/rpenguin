@@ -4,8 +4,8 @@
     - iced
     - egui
     - imgui ?? (only example i found of this was 10 months old and severely outdated for wgpu 22.0)
-- [ ] instance
-- [ ] add color uniform buffer
+- [x] instance
+- [ ] add color to instance
 - [ ] REFACTOR INPUT HANDLING FOR CAMERA CONTROLLER
 
 

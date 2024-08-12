@@ -38,15 +38,13 @@ impl Camera2D {
     }
 
     pub fn update_projection_matrix(&mut self) {
-        // WARN: might need to transform using OPENGL_TO_WGPU_MATRIX
-        // TODO: Math to figure the correct way of applying zoom
         let zoomsqred = self.zoom * self.zoom;
-        let left = (-zoomsqred + self.position.x);
+        let left = (-zoomsqred + self.position.x) * self.aspect;
 
-        let right = (zoomsqred + self.position.x);
+        let right = (zoomsqred + self.position.x) * self.aspect;
 
-        let top = (zoomsqred + self.position.y) * self.aspect;
-        let bottom = (-zoomsqred + self.position.y) * self.aspect;
+        let top = zoomsqred + self.position.y;
+        let bottom = -zoomsqred + self.position.y;
 
         self.proj = glam::Mat4::orthographic_lh(left, right, bottom, top, 0.0, 1.0);
 
@@ -182,7 +180,9 @@ impl CameraController2D {
 
         // zooming in and out
         if self.scroll_delta != 0.0 {
-            camera.zoom = (camera.zoom + self.scroll_delta * self.zoom_step).max(0.1);
+            // TODO: Clamp zoom
+            let multiplier = if self.mod_key { 4.0 } else { 1.0 };
+            camera.zoom = (camera.zoom + self.scroll_delta * self.zoom_step * multiplier).max(0.1);
             self.scroll_delta = 0.0;
         }
 

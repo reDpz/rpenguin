@@ -2100,6 +2100,8 @@ dependencies = [
  "image",
  "log",
  "pollster",
+ "rand",
+ "rayon",
  "wgpu 22.1.0",
  "winit",
 ]

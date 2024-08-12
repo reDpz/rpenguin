@@ -4,9 +4,12 @@ mod macros;
 mod engine;
 use engine::prelude::*;
 
+mod particle;
+
+use particle::simulation::NBodySimulation;
 use render_pipeline::RenderPipelineBuilder;
 use vert::BasicVertex;
-use wgpu::util::DeviceExt;
+use wgpu::util::{DeviceExt, RenderEncoder};
 
 use winit::dpi::PhysicalSize;
 use winit::{
@@ -52,9 +55,8 @@ pub async fn run() {
     // window.set_cursor_visible(CURSOR_VISIBILITY);
 
     // create our meshes
-    let vertices = BasicVertex::DEFAULT_TRIANGLE;
 
-    let mut state = State::new(&window, vertices.to_vec()).await;
+    let mut state = State::new(&window).await;
 
     event_loop
         .run(move |event, control_flow| match event {
@@ -96,7 +98,7 @@ pub async fn run() {
         .unwrap();
 }
 
-pub struct State<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> {
+pub struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -105,6 +107,8 @@ pub struct State<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> {
     clear_color: wgpu::Color,
 
     last_update: Instant,
+
+    nbody_simulation: NBodySimulation,
 
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
@@ -120,13 +124,12 @@ pub struct State<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> {
     pipeline_builder: render_pipeline::RenderPipelineBuilder<'a>,
     pipeline: wgpu::RenderPipeline,
 
-    vertices: Vec<V>,
-    vertex_count: u32,
-    vertex_buffer: wgpu::Buffer,
+    instances: Vec<glam::Mat4>,
+    instance_buffer: wgpu::Buffer,
 }
 
-impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
-    async fn new(window: &'a Window, vertices: Vec<V>) -> State<'a, V> {
+impl<'a> State<'a> {
+    async fn new(window: &'a Window) -> State<'a> {
         let size = window.inner_size();
 
         let wgpu_instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -185,7 +188,7 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
 
         /* ----------------- CAMERA ----------------- */
 
-        let mut camera = Camera2D::new(size.height as f32 / size.width as f32);
+        let mut camera = Camera2D::new(size.width as f32 / size.height as f32);
         camera.update_projection_matrix();
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera projection matrix"),
@@ -219,7 +222,11 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             }],
         });
 
-        let camera_controller = CameraController2D::new(2.0);
+        let camera_controller = CameraController2D::new(4.0);
+
+        /* ----------------- N BODY SIMULATION ----------------- */
+
+        let nbody_simulation = NBodySimulation::grid(100, 5.0);
 
         /* ----------------- SHADERS ----------------- */
 
@@ -230,11 +237,21 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             ),
         });
 
-        /* ----------------- SHADERS ----------------- */
+        /* ----------------- VERTEX BUFFER ----------------- */
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        /* let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        }); */
+
+        /* ----------------- INSTANCE BUFFER ----------------- */
+
+        let instances = nbody_simulation.instances();
+
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instances),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -246,7 +263,7 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
                 shaders: vec![shader],
                 ..Default::default()
             },
-            vec![BasicVertex::desc()],
+            vec![glam::Mat4::desc()],
             vec![camera_bind_group_layout],
             surface_format,
             wgpu::PrimitiveTopology::TriangleList,
@@ -273,6 +290,8 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             clear_color,
             last_update: Instant::now(),
 
+            nbody_simulation,
+
             pipeline_builder,
             pipeline,
 
@@ -286,9 +305,9 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             // it gets dropped after it as the surface contains
             // unsafe references to the window's resources.
             window,
-            vertex_count: vertices.len() as u32,
-            vertices,
-            vertex_buffer,
+
+            instances,
+            instance_buffer,
         }
     }
 
@@ -305,7 +324,7 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
             self.reconfigure_surface();
 
             // camera
-            self.camera.aspect = new_size.height as f32 / new_size.width as f32;
+            self.camera.aspect = new_size.width as f32 / new_size.height as f32;
         }
     }
 
@@ -324,6 +343,19 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
 
         self.camera.update_projection_matrix();
         self.camera_controller.process(&mut self.camera, delta);
+
+        self.nbody_simulation.update(delta);
+        self.instances = self.nbody_simulation.instances();
+        self.recreate_instance_buffer();
+
+        // INFO: this wont work because no COPY_DST flag which is needed for writing to the buffer.
+        // There is a way of doing this, go figure it out
+
+        /* self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&self.instances),
+        ); */
 
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -364,15 +396,25 @@ impl<'a, V: VertexBufferLayoutDescriptor + bytemuck::Pod> State<'a, V> {
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
-            render_pass.draw(0..self.vertex_count, 0..1);
+            render_pass.draw(0..3, 0..self.instances.len() as u32);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())
+    }
+
+    fn recreate_instance_buffer(&mut self) {
+        self.instance_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&self.instances),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
     }
 
     #[inline]
