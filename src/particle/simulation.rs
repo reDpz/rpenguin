@@ -99,7 +99,7 @@ impl Default for NBodySimulation {
         Self {
             particles,
             radius: 15.0,
-            speed: 500.0,
+            speed: 750.0,
         }
     }
 }

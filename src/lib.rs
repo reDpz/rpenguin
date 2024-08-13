@@ -180,11 +180,11 @@ impl<'a> State<'a> {
 
         /* ----------------- N BODY SIMULATION ----------------- */
 
-        let area = 100.0;
+        let area = 10.0;
         let nbody_simulation = NBodySimulation::rand_distribute(
             glam::Vec2 { x: area, y: area },
             glam::Vec2 { x: -area, y: -area },
-            1000,
+            3,
             1.0,
         );
 
