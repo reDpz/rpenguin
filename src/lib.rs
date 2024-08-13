@@ -46,6 +46,7 @@ pub async fn run() {
 
     let mut state = State::new(&window).await;
 
+    let mut last_render_time = Instant::now();
     event_loop
         .run(move |event, control_flow| match event {
             Event::WindowEvent {
@@ -58,7 +59,10 @@ pub async fn run() {
                         WindowEvent::Resized(new_size) => state.resize(*new_size),
 
                         WindowEvent::RedrawRequested => {
-                            state.update();
+                            let now = Instant::now();
+                            let delta = (now - last_render_time).as_secs_f32();
+                            state.update(delta);
+                            last_render_time = now;
                             match state.render() {
                                 Ok(_) => (),
                                 // reconfiguring the surface recreates the swapchain
@@ -94,7 +98,7 @@ pub struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     clear_color: wgpu::Color,
 
-    last_update: Instant,
+    last_render: Instant,
 
     nbody_simulation: NBodySimulation,
 
@@ -176,11 +180,11 @@ impl<'a> State<'a> {
 
         /* ----------------- N BODY SIMULATION ----------------- */
 
-        let area = 1000.0;
+        let area = 100.0;
         let nbody_simulation = NBodySimulation::rand_distribute(
             glam::Vec2 { x: area, y: area },
             glam::Vec2 { x: -area, y: -area },
-            100,
+            1000,
             1.0,
         );
 
@@ -287,7 +291,7 @@ impl<'a> State<'a> {
             config,
             size,
             clear_color,
-            last_update: Instant::now(),
+            last_render: Instant::now(),
 
             nbody_simulation,
 
@@ -337,9 +341,8 @@ impl<'a> State<'a> {
     }
 
     // TODO: delta is behaving oddly
-    fn update(&mut self) {
-        // update camera
-        let delta = self.last_update.elapsed().as_secs_f32();
+    fn update(&mut self, delta: f32) {
+        // let delta = self.last_render.elapsed().as_secs_f32();
         // let delta = 1.0 / 30.0;
         println!("delta: {delta}");
 
@@ -356,7 +359,7 @@ impl<'a> State<'a> {
             bytemuck::cast_slice(&[self.camera.proj]),
         );
 
-        self.last_update = Instant::now();
+        self.last_render = Instant::now();
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -396,6 +399,7 @@ impl<'a> State<'a> {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        // self.last_render = Instant::now();
 
         Ok(())
     }
