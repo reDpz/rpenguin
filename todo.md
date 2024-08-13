@@ -7,6 +7,7 @@
 - [x] instance
 - [x] add color to instance
 - [x] REFACTOR INPUT HANDLING FOR CAMERA CONTROLLER
+- [ ] Add collisions between particles using move and slide (this is a pretty stupid idea)
 - [ ] draw grid in background
     - *how are we going to do this?*
     - have a second render pipeline
