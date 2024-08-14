@@ -88,6 +88,7 @@ pub struct NBodySimulation {
     pub particles: Vec<Particle>,
     pub radius: f32,
     pub speed: f32,
+    pub is_running: bool,
 }
 
 impl Default for NBodySimulation {
@@ -100,6 +101,7 @@ impl Default for NBodySimulation {
             particles,
             radius: 15.0,
             speed: 750.0,
+            is_running: true,
         }
     }
 }
@@ -189,6 +191,9 @@ impl NBodySimulation {
     }
 
     pub fn update(&mut self, delta: f32) {
+        if !self.is_running{
+            return;
+        }
         // actual nbody sim
         let len = self.particles.len();
         let r2 = self.radius * self.radius;

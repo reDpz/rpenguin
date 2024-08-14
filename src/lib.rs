@@ -11,6 +11,7 @@ use render_pipeline::RenderPipelineBuilder;
 use wgpu::util::DeviceExt;
 
 use winit::dpi::PhysicalSize;
+use winit::keyboard::KeyCode;
 use winit::{
     event::*,
     event_loop::EventLoop,
@@ -31,7 +32,6 @@ pub async fn run() {
     let window = WindowBuilder::new()
         .with_title("wgpu-testing")
         .with_active(true)
-        .with_inner_size(PhysicalSize::new(720, 720))
         // .with_resizable(false)
         .build(&event_loop)
         .unwrap();
@@ -180,13 +180,7 @@ impl<'a> State<'a> {
 
         /* ----------------- N BODY SIMULATION ----------------- */
 
-        let area = 10.0;
-        let nbody_simulation = NBodySimulation::rand_distribute(
-            glam::Vec2 { x: area, y: area },
-            glam::Vec2 { x: -area, y: -area },
-            3,
-            1.0,
-        );
+        let nbody_simulation = create_simulation();
 
         /* ----------------- CAMERA ----------------- */
 
@@ -337,6 +331,25 @@ impl<'a> State<'a> {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         self.camera_controller.input(event);
+        match event {
+            WindowEvent::KeyboardInput { event: KeyEvent{
+                state,
+                physical_key: winit::keyboard::PhysicalKey::Code(keycode),..
+            }, ..} => {
+                if state.is_pressed(){
+                    match keycode{
+                        KeyCode::KeyR => {
+                            self.nbody_simulation = create_simulation();
+                        },
+                        KeyCode::Space => {
+                            self.nbody_simulation.is_running = !self.nbody_simulation.is_running;
+                        }
+                        _ =>{}
+                    }
+                }
+            },
+            _ => ()
+        }
         false
     }
 
@@ -344,7 +357,8 @@ impl<'a> State<'a> {
     fn update(&mut self, delta: f32) {
         // let delta = self.last_render.elapsed().as_secs_f32();
         // let delta = 1.0 / 30.0;
-        println!("delta: {delta}");
+        // println!("delta: {delta}");
+        printfps(delta);
 
         self.camera.update_projection_matrix();
         self.camera_controller.process(&mut self.camera, delta);
@@ -434,4 +448,14 @@ fn printfps(delta: f32) {
 
     print!("{}[2J", 27 as char);
     println!("{} FPS", fps as i32)
+}
+
+fn create_simulation() -> NBodySimulation {
+    let area = 15.0;
+    NBodySimulation::rand_distribute(
+        glam::Vec2 { x: area, y: area },
+        glam::Vec2 { x: -area, y: -area },
+        5,
+        1.0,
+    )
 }
