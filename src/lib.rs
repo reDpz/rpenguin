@@ -30,7 +30,7 @@ pub async fn run() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new()
-        .with_title("wgpu-testing")
+        .with_title("RPenguin")
         .with_active(true)
         // .with_resizable(false)
         .build(&event_loop)
