@@ -332,23 +332,28 @@ impl<'a> State<'a> {
     fn input(&mut self, event: &WindowEvent) -> bool {
         self.camera_controller.input(event);
         match event {
-            WindowEvent::KeyboardInput { event: KeyEvent{
-                state,
-                physical_key: winit::keyboard::PhysicalKey::Code(keycode),..
-            }, ..} => {
-                if state.is_pressed(){
-                    match keycode{
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state,
+                        physical_key: winit::keyboard::PhysicalKey::Code(keycode),
+                        ..
+                    },
+                ..
+            } => {
+                if state.is_pressed() {
+                    match keycode {
                         KeyCode::KeyR => {
                             self.nbody_simulation = create_simulation();
-                        },
+                        }
                         KeyCode::Space => {
                             self.nbody_simulation.is_running = !self.nbody_simulation.is_running;
                         }
-                        _ =>{}
+                        _ => {}
                     }
                 }
-            },
-            _ => ()
+            }
+            _ => (),
         }
         false
     }
@@ -358,7 +363,7 @@ impl<'a> State<'a> {
         // let delta = self.last_render.elapsed().as_secs_f32();
         // let delta = 1.0 / 30.0;
         // println!("delta: {delta}");
-        printfps(delta);
+        // printfps(delta);
 
         self.camera.update_projection_matrix();
         self.camera_controller.process(&mut self.camera, delta);
@@ -451,11 +456,10 @@ fn printfps(delta: f32) {
 }
 
 fn create_simulation() -> NBodySimulation {
-    let area = 15.0;
+    let area = 10.0;
     NBodySimulation::rand_distribute(
         glam::Vec2 { x: area, y: area },
         glam::Vec2 { x: -area, y: -area },
-        5,
-        1.0,
+        3,
     )
 }

@@ -7,6 +7,7 @@ pub struct Particle {
     pub position: glam::Vec2,
     pub velocity: glam::Vec2,
     pub color: glam::Vec3,
+    pub radius: f32,
 }
 
 #[repr(C)]
@@ -14,6 +15,7 @@ pub struct Particle {
 pub struct ParticleInstance {
     pub position: glam::Vec2,
     pub color: glam::Vec3,
+    pub radius: f32,
 }
 
 impl VertexBufferLayoutDescriptor for ParticleInstance {
@@ -40,6 +42,11 @@ impl VertexBufferLayoutDescriptor for ParticleInstance {
                     shader_location: 6,
                     format: wgpu::VertexFormat::Float32x3,
                 },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float32,
+                },
             ],
         }
     }
@@ -50,6 +57,7 @@ impl Particle {
         ParticleInstance {
             position: self.position,
             color: self.color,
+            radius: self.radius,
         }
     }
 
@@ -80,13 +88,13 @@ impl Default for Particle {
             position: glam::Vec2::splat(0.0),
             velocity: glam::Vec2::splat(0.0),
             color: glam::Vec3::splat(1.0),
+            radius: 1.0,
         }
     }
 }
 
 pub struct NBodySimulation {
     pub particles: Vec<Particle>,
-    pub radius: f32,
     pub speed: f32,
     pub is_running: bool,
 }
@@ -99,8 +107,7 @@ impl Default for NBodySimulation {
         }
         Self {
             particles,
-            radius: 15.0,
-            speed: 750.0,
+            speed: 100.0,
             is_running: true,
         }
     }
@@ -108,7 +115,7 @@ impl Default for NBodySimulation {
 
 impl NBodySimulation {
     /// Produces a grid of particles with the same amount of particles per row/column
-    pub fn grid(particle_count: usize, spacing: f32, radius: f32) -> Self {
+    pub fn grid(particle_count: usize, spacing: f32) -> Self {
         let mut rng = thread_rng();
         // my first attempt at using iterators (i barely understand any of what im doing)
         // when i finish my functional programming course i should understand what this is doing
@@ -133,23 +140,18 @@ impl NBodySimulation {
                         z: rng.next_u32() as f32,
                     }
                     .normalize(),
+                    radius: 1.0,
                 })
             }
         }
 
         Self {
             particles,
-            radius,
             ..Default::default()
         }
     }
 
-    pub fn rand_distribute(
-        max: glam::Vec2,
-        min: glam::Vec2,
-        particle_count: usize,
-        radius: f32,
-    ) -> Self {
+    pub fn rand_distribute(max: glam::Vec2, min: glam::Vec2, particle_count: usize) -> Self {
         let mut rng = thread_rng();
 
         let mut particles = Vec::with_capacity(particle_count);
@@ -167,12 +169,12 @@ impl NBodySimulation {
                     z: rng.next_u32() as f32,
                 }
                 .normalize(),
+                radius: rng.gen_range(0.5..1.5),
             });
         }
 
         Self {
             particles,
-            radius,
             ..Default::default()
         }
     }
@@ -191,29 +193,41 @@ impl NBodySimulation {
     }
 
     pub fn update(&mut self, delta: f32) {
-        if !self.is_running{
+        if !self.is_running {
             return;
         }
         // actual nbody sim
         let len = self.particles.len();
-        let r2 = self.radius * self.radius;
         for i in 0..len {
             for j in (i + 1)..len {
                 let i2j = self.particles[j].position - self.particles[i].position;
                 let distance_squared = i2j.length_squared();
+                let radii = self.particles[i].radius + self.particles[j].radius;
 
-                if distance_squared > r2 {
+                if distance_squared > radii.powi(2) {
                     let direction = i2j.normalize();
-                    let attraction = 1.0 / distance_squared;
+                    // here "radii" is the m1+m2
+                    let attraction = radii / distance_squared;
                     let to_add = direction * attraction * delta * self.speed;
                     self.particles[i].velocity += to_add;
                     self.particles[j].velocity -= to_add;
 
                     // println!("updated particles {i}, {j}");
-                } /* else {
-                      self.particles[i].velocity = -self.particles[i].velocity * 1.001;
-                      self.particles[j].velocity = -self.particles[j].velocity * 1.001;
-                  } */
+                }
+                // TODO:
+                else {
+                    println!("{i} and {j} collided");
+                    // let half = radii / 4.0;
+                    self.particles[i].position -= i2j * radii;
+                    self.particles[j].position += i2j * radii;
+
+                    // temp
+                    self.particles[i].velocity = glam::Vec2::ZERO;
+                    self.particles[j].velocity = glam::Vec2::ZERO;
+
+                    /* self.particles[i].velocity = -self.particles[i].velocity * 1.001;
+                    self.particles[j].velocity = -self.particles[j].velocity * 1.001; */
+                }
             }
         }
 
