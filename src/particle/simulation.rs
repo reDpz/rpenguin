@@ -1,3 +1,4 @@
+use crate::wgpu;
 use rand::{thread_rng, Rng, RngCore};
 use rayon::prelude::*;
 
@@ -62,7 +63,17 @@ impl Particle {
     }
 
     #[inline]
-    pub fn distance_to(&self, other: &Self) -> f32 {
+    pub fn distance_to_point(&self, point: glam::Vec2) -> f32 {
+        (self.position - point).length()
+    }
+
+    #[inline]
+    pub fn is_point_in(&self, point: glam::Vec2) -> bool {
+        self.distance_to_point(point) <= self.radius
+    }
+
+    #[inline]
+    pub fn distance_to_other(&self, other: &Self) -> f32 {
         (self.position - other.position).length()
     }
 
@@ -72,8 +83,8 @@ impl Particle {
     }
 
     #[inline]
-    pub fn is_colliding_with(&self, with: &Self, radius: f32) -> bool {
-        self.distance_to(with) <= radius
+    pub fn is_colliding_with(&self, with: &Self) -> bool {
+        self.distance_to_other(with) <= self.radius + self.radius
     }
 
     #[inline]
@@ -250,5 +261,16 @@ impl NBodySimulation {
         }
 
         center / len as f32
+    }
+
+    /// Returns the index of the particle at that position, returns none if there are no particles
+    /// there
+    pub fn particle_at(&self, position: glam::Vec2) -> Option<usize> {
+        // this is beautiful, i need to learn functional programming
+        self.particles
+            .par_iter()
+            .enumerate()
+            .find_any(|(_, p)| p.is_point_in(position))
+            .map(|(i, _)| i)
     }
 }

@@ -1,3 +1,4 @@
+use crate::wgpu;
 use crate::VertexBufferLayoutDescriptor;
 impl VertexBufferLayoutDescriptor for glam::Mat4 {
     fn desc() -> wgpu::VertexBufferLayout<'static> {

@@ -1,3 +1,4 @@
+use crate::wgpu;
 use std::mem::size_of;
 // needed because buffers must be contiguous
 #[repr(C)]

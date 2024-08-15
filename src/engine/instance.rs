@@ -1,4 +1,5 @@
 use crate::engine::vert::VertexBufferLayoutDescriptor;
+use crate::wgpu;
 // what we interact with
 pub struct Instance {
     pub position: cgmath::Vector3<f32>,

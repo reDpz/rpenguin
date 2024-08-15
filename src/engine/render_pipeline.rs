@@ -1,3 +1,4 @@
+use crate::wgpu;
 pub struct RenderPipelineBuilder<'a> {
     pub sc: ShaderCollection,
     pub bind_group_layouts: Vec<wgpu::BindGroupLayout>,
@@ -107,7 +108,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-            cache: None,
+            // cache: None,
         })
     }
 

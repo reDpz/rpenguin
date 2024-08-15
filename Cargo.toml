@@ -6,21 +6,26 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-winit = { version = "0.29", features = ["rwh_05"] }
+winit = { version = "0.29.4", features = ["rwh_05"] }
 env_logger = "0.10"
 log = "0.4"
-wgpu = "22.0"
+# wgpu = "22.0"
 pollster = "0.3.0"
 bytemuck = { version = "1.16.1", features = ["derive"] }
 image = "0.25.2"
 anyhow = "1.0.86"
 cgmath = { version = "0.18.0", features = ["swizzle"] }
 glam = { version = "0.28.0", features = ["bytemuck"] }
-egui = "0.28.1"
-egui-wgpu = { version = "0.28.1", features = ["winit"] }
-egui-winit = "0.28.1"
+
 rayon = "1.10.0"
 rand = "0.8.5"
+
+# egui
+egui = "0.28.1"
+raw-window-handle = "0.6.2"
+egui-wgpu = { version = "0.28.1",features = ["winit"] }
+egui-winit = "0.28.1"
+
 
 # Enable a large amount of optimization in the dev profile for dependencies.
 [profile.dev.package."*"]

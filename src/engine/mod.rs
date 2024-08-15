@@ -8,4 +8,4 @@ pub mod texture;
 pub mod timer;
 pub mod vert;
 
-// pub mod egui_tools;
+pub mod egui_tools;

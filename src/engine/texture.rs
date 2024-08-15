@@ -1,3 +1,4 @@
+use crate::wgpu;
 use anyhow::*;
 use image::{DynamicImage, GenericImageView};
 

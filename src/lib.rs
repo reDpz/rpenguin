@@ -2,15 +2,16 @@
 mod macros;
 
 mod engine;
-use engine::prelude::*;
+use engine::{egui_tools, prelude::*};
 
 mod particle;
 
+use egui_wgpu::wgpu::util::DeviceExt;
+use egui_wgpu::{wgpu, ScreenDescriptor};
+use glam::Vec3Swizzles;
 use particle::simulation::{NBodySimulation, ParticleInstance};
 use render_pipeline::RenderPipelineBuilder;
-use wgpu::util::DeviceExt;
 
-use winit::dpi::PhysicalSize;
 use winit::keyboard::KeyCode;
 use winit::{
     event::*,
@@ -97,8 +98,7 @@ pub struct State<'a> {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
     clear_color: wgpu::Color,
-
-    last_render: Instant,
+    egui_renderer: egui_tools::EguiRenderer,
 
     nbody_simulation: NBodySimulation,
 
@@ -106,6 +106,7 @@ pub struct State<'a> {
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
     window: &'a Window,
+    mouse_position: glam::Vec2,
 
     camera: Camera2D,
     camera_buffer: wgpu::Buffer,
@@ -148,7 +149,6 @@ impl<'a> State<'a> {
                     // NOTE: This is where you add features
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
-                    memory_hints: wgpu::MemoryHints::default(),
                 },
                 None,
             )
@@ -178,6 +178,10 @@ impl<'a> State<'a> {
             view_formats: vec![],
         };
 
+        /* ----------------- EGUI ----------------- */
+
+        let egui_renderer = egui_tools::EguiRenderer::new(&device, config.format, None, 1, &window);
+
         /* ----------------- N BODY SIMULATION ----------------- */
 
         let nbody_simulation = create_simulation();
@@ -186,10 +190,10 @@ impl<'a> State<'a> {
 
         let mut camera = Camera2D::new(size.width as f32 / size.height as f32);
         camera.zoom = 10.0;
-        {
+        /* {
             let center = nbody_simulation.center();
             camera.position = glam::Vec3::new(center.x, center.y, 0.0);
-        }
+        } */
         camera.update_projection_matrix();
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera projection matrix"),
@@ -223,7 +227,7 @@ impl<'a> State<'a> {
             }],
         });
 
-        let camera_controller = CameraController2D::new(4.0);
+        let camera_controller = CameraController2D::new(6.0);
 
         /* ----------------- SHADERS ----------------- */
 
@@ -285,7 +289,7 @@ impl<'a> State<'a> {
             config,
             size,
             clear_color,
-            last_render: Instant::now(),
+            egui_renderer,
 
             nbody_simulation,
 
@@ -302,6 +306,7 @@ impl<'a> State<'a> {
             // it gets dropped after it as the surface contains
             // unsafe references to the window's resources.
             window,
+            mouse_position: glam::Vec2::ZERO,
 
             instances,
             instance_buffer,
@@ -330,6 +335,8 @@ impl<'a> State<'a> {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
+        self.egui_renderer.handle_input(self.window, event);
+
         self.camera_controller.input(event);
         match event {
             WindowEvent::KeyboardInput {
@@ -352,6 +359,10 @@ impl<'a> State<'a> {
                         _ => {}
                     }
                 }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.mouse_position.x = position.x as f32;
+                self.mouse_position.y = position.y as f32;
             }
             _ => (),
         }
@@ -377,8 +388,6 @@ impl<'a> State<'a> {
             0,
             bytemuck::cast_slice(&[self.camera.proj]),
         );
-
-        self.last_render = Instant::now();
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -415,6 +424,52 @@ impl<'a> State<'a> {
 
             render_pass.draw(0..3, 0..self.instances.len() as u32);
         }
+
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window().scale_factor() as f32,
+        };
+
+        self.egui_renderer.draw(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            self.window,
+            &view,
+            screen_descriptor,
+            |ctx| {
+                egui::Window::new("Info")
+                    .resizable(true)
+                    .vscroll(true)
+                    .default_open(false)
+                    .show(ctx, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Cursor: ");
+                            ui.label(format!(
+                                "{:.2}, {:.2}",
+                                self.mouse_position.x, self.mouse_position.y
+                            ));
+                        });
+
+                        // TODO: figure out how to convert from screenspace to world space
+                        let mut screen_pos = self.mouse_position;
+                        screen_pos.x -= self.config.width as f32 * 0.5;
+                        screen_pos.y -= self.config.height as f32 * 0.5;
+                        let world_pos = (screen_pos + self.camera.position.xy());
+
+                        ui.horizontal(|ui| {
+                            ui.label("World Position:");
+                            // camera projection matrix translates world space to screen space, we
+                            // want to go from screen space to world space
+                            ui.label(format!("x:{:.2}, y:{:.2}", world_pos.x, -world_pos.y))
+                        });
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            let particle = self.nbody_simulation.particle_at(world_pos);
+                        })
+                    });
+            },
+        );
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
