@@ -107,7 +107,7 @@ impl Default for NBodySimulation {
         }
         Self {
             particles,
-            speed: 100.0,
+            speed: 750.0,
             is_running: true,
         }
     }
@@ -203,8 +203,9 @@ impl NBodySimulation {
                 let i2j = self.particles[j].position - self.particles[i].position;
                 let distance_squared = i2j.length_squared();
                 let radii = self.particles[i].radius + self.particles[j].radius;
+                let radii2 = radii.powi(2);
 
-                if distance_squared > radii.powi(2) {
+                if distance_squared > radii2 {
                     let direction = i2j.normalize();
                     // here "radii" is the m1+m2
                     let attraction = radii / distance_squared;
@@ -217,13 +218,17 @@ impl NBodySimulation {
                 // TODO:
                 else {
                     println!("{i} and {j} collided");
-                    // let half = radii / 4.0;
-                    self.particles[i].position -= i2j * radii;
-                    self.particles[j].position += i2j * radii;
+                    let dist_inside = (radii - distance_squared.sqrt()) * 0.5;
+                    self.particles[i].position -= i2j * dist_inside;
+                    self.particles[j].position += i2j * dist_inside;
 
                     // temp
-                    self.particles[i].velocity = glam::Vec2::ZERO;
-                    self.particles[j].velocity = glam::Vec2::ZERO;
+                    let i_vel = self.particles[i].velocity;
+                    self.particles[i].velocity = self.particles[j].velocity;
+                    self.particles[j].velocity = i_vel;
+
+                    self.particles[i].radius += 0.1;
+                    self.particles[j].radius += 0.1;
 
                     /* self.particles[i].velocity = -self.particles[i].velocity * 1.001;
                     self.particles[j].velocity = -self.particles[j].velocity * 1.001; */
