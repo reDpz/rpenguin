@@ -99,6 +99,7 @@ pub struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     clear_color: wgpu::Color,
     egui_renderer: egui_tools::EguiRenderer,
+    grid_renderer: engine::rendering::grid_renderer::GridRenderer,
 
     nbody_simulation: NBodySimulation,
 
@@ -177,6 +178,11 @@ impl<'a> State<'a> {
             desired_maximum_frame_latency: 2,
             view_formats: vec![],
         };
+
+        /* ----------------- GRID RENDERER ----------------- */
+
+        let grid_renderer =
+            engine::rendering::grid_renderer::GridRenderer::new(&device, surface_format);
 
         /* ----------------- EGUI ----------------- */
 
@@ -290,6 +296,7 @@ impl<'a> State<'a> {
             size,
             clear_color,
             egui_renderer,
+            grid_renderer,
 
             nbody_simulation,
 
@@ -402,6 +409,8 @@ impl<'a> State<'a> {
                 label: Some("Render Encoder"),
             });
 
+        self.grid_renderer.draw(&mut encoder, &view);
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -409,7 +418,7 @@ impl<'a> State<'a> {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
