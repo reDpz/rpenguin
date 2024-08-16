@@ -5,6 +5,7 @@
 - [x] instance
 - [x] add color to instance
 - [x] REFACTOR INPUT HANDLING FOR CAMERA CONTROLLER
+- [ ] figure out how to use the camera projection to convert from screenspace to worldspace
 - [ ] Add collisions between particles using move and slide (this is a pretty stupid idea)
 - [ ] draw grid in background
     - *how are we going to do this?*

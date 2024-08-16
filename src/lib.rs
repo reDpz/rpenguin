@@ -436,7 +436,7 @@ impl<'a> State<'a> {
             &mut encoder,
             self.window,
             &view,
-            screen_descriptor,
+            &screen_descriptor,
             |ctx| {
                 egui::Window::new("Info")
                     .resizable(true)
@@ -452,10 +452,7 @@ impl<'a> State<'a> {
                         });
 
                         // TODO: figure out how to convert from screenspace to world space
-                        let mut screen_pos = self.mouse_position;
-                        screen_pos.x -= self.config.width as f32 * 0.5;
-                        screen_pos.y -= self.config.height as f32 * 0.5;
-                        let world_pos = (screen_pos + self.camera.position.xy());
+                        let world_pos = self.mouse_position;
 
                         ui.horizontal(|ui| {
                             ui.label("World Position:");

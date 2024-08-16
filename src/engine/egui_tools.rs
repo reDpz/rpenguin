@@ -60,7 +60,7 @@ impl EguiRenderer {
         encoder: &mut CommandEncoder,
         window: &Window,
         window_surface_view: &TextureView,
-        screen_descriptor: ScreenDescriptor,
+        screen_descriptor: &ScreenDescriptor,
         run_ui: impl FnOnce(&Context),
     ) {
         self.state
